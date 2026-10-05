@@ -1,0 +1,317 @@
+[
+  {
+    "players": [
+      {
+        "name": "Даня",
+        "score": 5,
+        "attempts": 5,
+        "completed": 5,
+        "failed": 0,
+        "categories": {
+          "speed": {
+            "completed": 5,
+            "failed": 0
+          }
+        },
+        "completed_cards": [
+          24,
+          10,
+          45,
+          17,
+          11
+        ]
+      }
+    ],
+    "pool_left": 50,
+    "winner": "Даня",
+    "mode": 5
+  },
+  {
+    "players": [
+      {
+        "name": "Валера",
+        "score": 5,
+        "attempts": 6,
+        "completed": 5,
+        "failed": 1,
+        "categories": {
+          "speed": {
+            "completed": 5,
+            "failed": 1
+          }
+        },
+        "completed_cards": [
+          17,
+          39,
+          43,
+          16,
+          11
+        ]
+      },
+      {
+        "name": "Антон",
+        "score": 4,
+        "attempts": 5,
+        "completed": 4,
+        "failed": 1,
+        "categories": {
+          "speed": {
+            "completed": 4,
+            "failed": 1
+          }
+        },
+        "completed_cards": [
+          7,
+          20,
+          19
+        ]
+      }
+    ],
+    "pool_left": 50,
+    "winner": "Валера",
+    "mode": 5
+  },
+  {
+    "players": [
+      {
+        "name": "Мишаня",
+        "score": 4,
+        "attempts": 5,
+        "completed": 4,
+        "failed": 1,
+        "categories": {
+          "shooting": {
+            "completed": 1,
+            "failed": 0
+          },
+          "speed": {
+            "completed": 3,
+            "failed": 1
+          }
+        },
+        "completed_cards": [
+          27,
+          16,
+          3,
+          7
+        ]
+      },
+      {
+        "name": "Хасим",
+        "score": 5,
+        "attempts": 5,
+        "completed": 5,
+        "failed": 0,
+        "categories": {
+          "speed": {
+            "completed": 2,
+            "failed": 0
+          },
+          "shooting": {
+            "completed": 2,
+            "failed": 0
+          },
+          "physical": {
+            "completed": 1,
+            "failed": 0
+          }
+        },
+        "completed_cards": [
+          2,
+          3,
+          26,
+          28,
+          39
+        ]
+      }
+    ],
+    "pool_left": 50,
+    "winner": "Хасим",
+    "mode": 5
+  },
+  {
+    "players": [
+      {
+        "name": "Лиза",
+        "score": 1,
+        "attempts": 5,
+        "completed": 1,
+        "failed": 4,
+        "categories": {
+          "shooting": {
+            "completed": 1,
+            "failed": 3
+          },
+          "speed": {
+            "completed": 0,
+            "failed": 1
+          }
+        },
+        "completed_cards": [
+          25
+        ]
+      },
+      {
+        "name": "Даня",
+        "score": 5,
+        "attempts": 5,
+        "completed": 5,
+        "failed": 0,
+        "categories": {
+          "shooting": {
+            "completed": 2,
+            "failed": 0
+          },
+          "speed": {
+            "completed": 2,
+            "failed": 0
+          },
+          "physical": {
+            "completed": 1,
+            "failed": 0
+          }
+        },
+        "completed_cards": [
+          31,
+          26,
+          2,
+          4,
+          35
+        ]
+      }
+    ],
+    "pool_left": 50,
+    "winner": "Даня",
+    "mode": 5
+  },
+  {
+    "players": [
+      {
+        "name": "Обэма",
+        "score": 5,
+        "attempts": 6,
+        "completed": 5,
+        "failed": 1,
+        "categories": {
+          "shooting": {
+            "completed": 3,
+            "failed": 0
+          },
+          "physical": {
+            "completed": 2,
+            "failed": 0
+          },
+          "speed": {
+            "completed": 0,
+            "failed": 1
+          }
+        },
+        "completed_cards": [
+          26,
+          36,
+          17,
+          25,
+          47
+        ]
+      }
+    ],
+    "pool_left": 50,
+    "winner": "Обэма",
+    "mode": 5
+  },
+  {
+    "players": [
+      {
+        "name": "Ван",
+        "score": 5,
+        "attempts": 7,
+        "completed": 5,
+        "failed": 2,
+        "categories": {
+          "general": {
+            "completed": 1,
+            "failed": 0
+          },
+          "physical": {
+            "completed": 3,
+            "failed": 0
+          },
+          "shooting": {
+            "completed": 0,
+            "failed": 2
+          },
+          "speed": {
+            "completed": 1,
+            "failed": 0
+          }
+        },
+        "completed_cards": [
+          49,
+          43,
+          48,
+          44,
+          6
+        ]
+      }
+    ],
+    "pool_left": 50,
+    "winner": "Ван",
+    "mode": 5
+  },
+  {
+    "players": [
+      {
+        "name": "Придурок",
+        "score": 5,
+        "attempts": 6,
+        "completed": 5,
+        "failed": 1,
+        "categories": {
+          "speed": {
+            "completed": 1,
+            "failed": 1
+          },
+          "physical": {
+            "completed": 2,
+            "failed": 0
+          },
+          "shooting": {
+            "completed": 2,
+            "failed": 0
+          }
+        },
+        "completed_cards": [
+          36,
+          30,
+          27,
+          46,
+          6
+        ]
+      },
+      {
+        "name": "Банан",
+        "score": 2,
+        "attempts": 5,
+        "completed": 2,
+        "failed": 3,
+        "categories": {
+          "shooting": {
+            "completed": 2,
+            "failed": 1
+          },
+          "speed": {
+            "completed": 0,
+            "failed": 2
+          }
+        },
+        "completed_cards": [
+          30,
+          26
+        ]
+      }
+    ],
+    "pool_left": 50,
+    "winner": "Придурок",
+    "mode": 5
+  }
+]
