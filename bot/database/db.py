@@ -90,6 +90,28 @@ async def init_db():
             )
         """)
 
+        # Общие таблицы магазина/активации. Магазин и игровой бот
+        # используют одну PostgreSQL-базу.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS activation_codes (
+                id BIGSERIAL PRIMARY KEY,
+                code VARCHAR(10) UNIQUE NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'available',
+                order_id BIGINT NULL,
+                buyer_telegram_id BIGINT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                issued_at TIMESTAMP NULL,
+                activated_at TIMESTAMP NULL
+            )
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS activated_users (
+                telegram_id BIGINT PRIMARY KEY,
+                activated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
 
 # ============================================================
 # ЗАКРЫТИЕ БАЗЫ

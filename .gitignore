@@ -2,11 +2,6 @@ venv/
 .venv/
 __pycache__/
 *.pyc
-
 .env
 .env.*
-!.env.example
-
-.vscode/
-
-*.log
+data/*.json

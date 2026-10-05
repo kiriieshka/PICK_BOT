@@ -2,7 +2,7 @@ import json
 import secrets
 from pathlib import Path
 
-from config import DATA_DIR
+from config import DATA_DIR, DATABASE_URL, DB_ENABLED
 
 
 CODES_FILE = Path(DATA_DIR) / "activation_codes.json"
@@ -40,11 +40,45 @@ def _save_json(path: Path, data):
     )
 
 
+def _db_connect():
+    if not DB_ENABLED or not DATABASE_URL:
+        return None
+
+    import psycopg
+    return psycopg.connect(DATABASE_URL)
+
+
 def generate_codes(count=CODES_COUNT):
-    """
-    Создаёт нужное количество уникальных 10-значных кодов.
-    Уже существующие коды не удаляются.
-    """
+    """Создаёт нужное количество кодов."""
+    if DB_ENABLED:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                while True:
+                    cur.execute(
+                        "SELECT COUNT(*) FROM activation_codes"
+                    )
+                    current = cur.fetchone()[0]
+                    if current >= count:
+                        break
+
+                    code = "".join(
+                        str(secrets.randbelow(10))
+                        for _ in range(CODE_LENGTH)
+                    )
+
+                    try:
+                        cur.execute(
+                            """
+                            INSERT INTO activation_codes(code, status)
+                            VALUES (%s, 'available')
+                            ON CONFLICT (code) DO NOTHING
+                            """,
+                            (code,),
+                        )
+                    except Exception:
+                        conn.rollback()
+        return
+
     codes = _load_json(CODES_FILE, {})
 
     while len(codes) < count:
@@ -61,18 +95,98 @@ def generate_codes(count=CODES_COUNT):
 
 
 def is_activated(user_id: int) -> bool:
+    if DB_ENABLED:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM activated_users
+                    WHERE telegram_id=%s
+                    """,
+                    (user_id,),
+                )
+                return cur.fetchone() is not None
+
     users = _load_json(USERS_FILE, {})
     return str(user_id) in users
 
 
 def activate_code(user_id: int, code: str) -> str:
     """
-    Возвращает:
-    - 'activated' — успешно активирован
-    - 'already_activated' — пользователь уже активирован
-    - 'invalid' — код неправильный
-    - 'used' — код уже использован
+    Returns:
+    - activated
+    - already_activated
+    - invalid
+    - used
+    - not_for_user
     """
+    if DB_ENABLED:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM activated_users
+                    WHERE telegram_id=%s
+                    """,
+                    (user_id,),
+                )
+                if cur.fetchone():
+                    return "already_activated"
+
+                cur.execute(
+                    """
+                    SELECT status, buyer_telegram_id
+                    FROM activation_codes
+                    WHERE code=%s
+                    FOR UPDATE
+                    """,
+                    (code,),
+                )
+                row = cur.fetchone()
+
+                if not row:
+                    return "invalid"
+
+                status, buyer_telegram_id = row
+
+                if status == "activated":
+                    return "used"
+
+                # Shop-issued keys belong to the Telegram account that paid.
+                # Pre-generated "available" admin keys remain usable by anyone.
+                if (
+                    status == "issued"
+                    and buyer_telegram_id is not None
+                    and int(buyer_telegram_id) != int(user_id)
+                ):
+                    return "not_for_user"
+
+                if status not in ("available", "issued"):
+                    return "used"
+
+                cur.execute(
+                    """
+                    UPDATE activation_codes
+                    SET status='activated',
+                        activated_at=CURRENT_TIMESTAMP
+                    WHERE code=%s
+                    """,
+                    (code,),
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO activated_users(telegram_id)
+                    VALUES (%s)
+                    ON CONFLICT (telegram_id) DO NOTHING
+                    """,
+                    (user_id,),
+                )
+
+                return "activated"
+
     user_id = str(user_id)
     code = code.strip()
 
@@ -98,14 +212,36 @@ def activate_code(user_id: int, code: str) -> str:
 
 
 def get_unused_codes():
+    if DB_ENABLED:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT code
+                    FROM activation_codes
+                    WHERE status='available'
+                    ORDER BY id
+                    """
+                )
+                return [row[0] for row in cur.fetchall()]
+
     codes = _load_json(CODES_FILE, {})
     return [code for code, used in codes.items() if not used]
 
 
 def get_used_codes():
+    if DB_ENABLED:
+        with _db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT code
+                    FROM activation_codes
+                    WHERE status='activated'
+                    ORDER BY id
+                    """
+                )
+                return [row[0] for row in cur.fetchall()]
+
     codes = _load_json(CODES_FILE, {})
     return [code for code, used in codes.items() if used]
-
-
-# При первом запуске автоматически создаём 100 кодов.
-generate_codes()
