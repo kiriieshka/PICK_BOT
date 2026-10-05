@@ -2,15 +2,11 @@ import json
 
 from pathlib import Path
 
-import aiomysql
+import asyncpg
 
 from config import (
     DB_ENABLED,
-    DB_HOST,
-    DB_PORT,
-    DB_USER,
-    DB_PASSWORD,
-    DB_NAME,
+    DATABASE_URL,
     HISTORY_FILE,
     EXCLUDED_FILE,
 )
@@ -48,61 +44,51 @@ async def init_db():
 
         return
 
-    POOL = await aiomysql.create_pool(
-        host=DB_HOST,
-        port=DB_PORT,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        db=DB_NAME,
-        autocommit=True,
-        minsize=1,
-        maxsize=5,
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DB_ENABLED=true, но переменная DATABASE_URL не задана"
+        )
+
+    POOL = await asyncpg.create_pool(
+        dsn=DATABASE_URL,
+        min_size=1,
+        max_size=5,
     )
 
     async with POOL.acquire() as conn:
-        async with conn.cursor() as cur:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS active_games (
+                chat_id BIGINT PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS active_games (
-                    chat_id BIGINT PRIMARY KEY,
-                    state_json LONGTEXT NOT NULL,
-                    updated_at TIMESTAMP
-                    DEFAULT CURRENT_TIMESTAMP
-                    ON UPDATE CURRENT_TIMESTAMP
-                )
-            """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS game_history (
+                id BIGSERIAL PRIMARY KEY,
+                chat_id BIGINT NOT NULL,
+                mode INT NOT NULL DEFAULT 50,
+                players_count INT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS game_history (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    chat_id BIGINT NOT NULL,
-                    mode INT NOT NULL DEFAULT 50,
-                    players_count INT NOT NULL,
-                    result_json LONGTEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+        # Миграция старой v1.0 таблицы
+        await conn.execute("""
+            ALTER TABLE game_history
+            ADD COLUMN IF NOT EXISTS mode INT NOT NULL DEFAULT 50
+        """)
 
-            # Миграция старой v1.0 таблицы
-            try:
-                await cur.execute(
-                    """
-                    ALTER TABLE game_history
-                    ADD COLUMN mode INT NOT NULL DEFAULT 50
-                    AFTER chat_id
-                    """
-                )
-            except Exception:
-                pass
-
-            # Игроки, исключённые из турнирной таблицы.
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS excluded_players (
-                    name_key VARCHAR(100) PRIMARY KEY,
-                    display_name VARCHAR(100) NOT NULL,
-                    excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+        # Игроки, исключённые из турнирной таблицы.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS excluded_players (
+                name_key VARCHAR(100) PRIMARY KEY,
+                display_name VARCHAR(100) NOT NULL,
+                excluded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
 
 # ============================================================
@@ -113,8 +99,7 @@ async def close_db():
     global POOL
 
     if POOL:
-        POOL.close()
-        await POOL.wait_closed()
+        await POOL.close()
         POOL = None
 
 
@@ -132,16 +117,17 @@ async def save_game(chat_id, game):
     )
 
     async with POOL.acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                INSERT INTO active_games(chat_id, state_json)
-                VALUES(%s, %s)
-                ON DUPLICATE KEY UPDATE
-                    state_json=VALUES(state_json)
-                """,
-                (chat_id, state),
-            )
+        await conn.execute(
+            """
+            INSERT INTO active_games(chat_id, state_json, updated_at)
+            VALUES($1, $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (chat_id) DO UPDATE SET
+                state_json = EXCLUDED.state_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            chat_id,
+            state,
+        )
 
 
 # ============================================================
@@ -153,11 +139,10 @@ async def delete_saved_game(chat_id):
         return
 
     async with POOL.acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                "DELETE FROM active_games WHERE chat_id=%s",
-                (chat_id,),
-            )
+        await conn.execute(
+            "DELETE FROM active_games WHERE chat_id=$1",
+            chat_id,
+        )
 
 
 # ============================================================
@@ -214,27 +199,24 @@ async def save_history(chat_id, game):
         return
 
     async with POOL.acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                INSERT INTO game_history(
-                    chat_id,
-                    mode,
-                    players_count,
-                    result_json
-                )
-                VALUES(%s, %s, %s, %s)
-                """,
-                (
-                    chat_id,
-                    game.mode,
-                    len(game.players),
-                    json.dumps(
-                        result,
-                        ensure_ascii=False,
-                    ),
-                ),
+        await conn.execute(
+            """
+            INSERT INTO game_history(
+                chat_id,
+                mode,
+                players_count,
+                result_json
             )
+            VALUES($1, $2, $3, $4)
+            """,
+            chat_id,
+            game.mode,
+            len(game.players),
+            json.dumps(
+                result,
+                ensure_ascii=False,
+            ),
+        )
 
 
 # ============================================================
@@ -253,21 +235,18 @@ async def get_excluded_players():
     if POOL:
 
         async with POOL.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    """
-                    SELECT name_key, display_name
-                    FROM excluded_players
-                    ORDER BY display_name
-                    """
-                )
-
-                rows = await cur.fetchall()
+            rows = await conn.fetch(
+                """
+                SELECT name_key, display_name
+                FROM excluded_players
+                ORDER BY display_name
+                """
+            )
 
         return [
             {
-                "name_key": row[0],
-                "name": row[1],
+                "name_key": row["name_key"],
+                "name": row["display_name"],
             }
             for row in rows
         ]
@@ -313,19 +292,19 @@ async def exclude_player(name):
     if POOL:
 
         async with POOL.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    """
-                    INSERT INTO excluded_players(
-                        name_key,
-                        display_name
-                    )
-                    VALUES(%s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        display_name=VALUES(display_name)
-                    """,
-                    (name_key, name),
+            await conn.execute(
+                """
+                INSERT INTO excluded_players(
+                    name_key,
+                    display_name
                 )
+                VALUES($1, $2)
+                ON CONFLICT (name_key) DO UPDATE SET
+                    display_name = EXCLUDED.display_name
+                """,
+                name_key,
+                name,
+            )
 
         return
 
@@ -379,14 +358,13 @@ async def include_player(name):
     if POOL:
 
         async with POOL.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    """
-                    DELETE FROM excluded_players
-                    WHERE name_key=%s
-                    """,
-                    (name_key,),
-                )
+            await conn.execute(
+                """
+                DELETE FROM excluded_players
+                WHERE name_key=$1
+                """,
+                name_key,
+            )
 
         return
 
@@ -456,21 +434,18 @@ async def get_overall_statistics():
     if POOL:
 
         async with POOL.acquire() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    """
-                    SELECT result_json
-                    FROM game_history
-                    ORDER BY created_at ASC, id ASC
-                    """
-                )
-
-                rows = await cur.fetchall()
+            rows = await conn.fetch(
+                """
+                SELECT result_json
+                FROM game_history
+                ORDER BY created_at ASC, id ASC
+                """
+            )
 
         for row in rows:
             try:
                 records.append(
-                    json.loads(row[0])
+                    json.loads(row["result_json"])
                 )
             except Exception:
                 pass
@@ -587,17 +562,16 @@ async def restore_games(active_games):
         return
 
     async with POOL.acquire() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                SELECT chat_id, state_json
-                FROM active_games
-                """
-            )
+        rows = await conn.fetch(
+            """
+            SELECT chat_id, state_json
+            FROM active_games
+            """
+        )
 
-            rows = await cur.fetchall()
-
-    for chat_id, state in rows:
+    for row in rows:
+        chat_id = row["chat_id"]
+        state = row["state_json"]
 
         try:
             active_games[int(chat_id)] = Game.from_dict(
